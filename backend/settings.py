@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # unbox apps
-    'apps.accounts'
+    'apps.accounts',
+    'apps.videos'
 ]
 
 MIDDLEWARE = [
