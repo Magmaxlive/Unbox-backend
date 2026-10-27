@@ -40,7 +40,17 @@ INSTALLED_APPS = [
 
     # unbox apps
     'apps.accounts',
-    'apps.videos'
+    'apps.videos',
+    'apps.blogs',
+    'apps.categories',
+    'apps.moderation',
+    'apps.uploads',
+    'apps.media_assets',
+
+    # Third party
+    'rest_framework',
+    'corsheaders',
+    'drf_spectacular'
 ]
 
 MIDDLEWARE = [
