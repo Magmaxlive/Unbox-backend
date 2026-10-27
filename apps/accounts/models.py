@@ -26,3 +26,26 @@ class UserManager(BaseUserManager):
             raise ValueError('Superuser must have is_superuser=True')
 
         return self.create_user(email,password,**extra_fields)
+
+
+class User(AbstractUser):
+    class Role(models.TextChoices):
+        ADMIN = 'admin','Admin'
+        CONTRIBUTOR = 'contributor','Contributor'
+
+    username = None
+
+    email = models.EmailField(unique=True)
+    name = models.CharField(max_length=150)
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.CONTRIBUTOR
+    )
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['name']
+
+    objects = UserManager()
+
+    def __str__(self):
+        return self.email
