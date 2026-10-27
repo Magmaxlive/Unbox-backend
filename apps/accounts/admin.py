@@ -38,4 +38,4 @@ class CustomUserAdmin(UserAdmin):
         )
     )
 
-    filter_horizontal = ('groups','user_perimissions')
+    filter_horizontal = ('groups','user_permissions')
