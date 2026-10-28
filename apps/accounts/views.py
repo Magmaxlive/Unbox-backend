@@ -1,7 +1,10 @@
 from django.shortcuts import render
 from rest_framework import generics,permissions,status
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView,TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import InvalidToken,TokenError
 from .serializers import *
 from django.conf import settings
 
@@ -51,3 +54,42 @@ class CurrentUserView(generics.RetrieveAPIView):
     def get_object(self):
         return self.request.user
 
+class CookieTokenRefreshView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self,request):
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        if not refresh_token:
+            return Response(
+                {'detail' : 'Refresh Token missing'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        try:
+            refresh = RefreshToken(refresh)
+            access_token = str(refresh.access_token)
+
+            response = Response(
+                {'message': 'Token refreshed successfully'},
+                status=status.HTTP_200_OK,
+            )
+
+            response.set_cookie(
+                key='access_token',
+                value=access_token,
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite='Lax',
+                path='/',
+                max_age=15 * 60,
+            )
+
+            return response
+
+        except (InvalidToken,TokenError):
+            return Response(
+                {'detail':'Refresh token is invalid or expired'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
