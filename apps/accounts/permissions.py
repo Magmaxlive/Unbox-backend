@@ -15,12 +15,9 @@ class IsAdminRole(BasePermission):
     message = 'Admin acccess required'
 
     def has_permission(self, request, view):
-        user = request.user
-
         return (
-            user
-            and user.is_authenticated
-            and user.role == 'admin'
+            request.user.is_authenticated
+            and request.user.role == 'admin'
         )
 
 
@@ -30,7 +27,6 @@ class IsContributorRole(BasePermission):
     def has_permission(self, request, view):
         user = request.user
         return (
-            user
-            and user.is_authenticated
-            and user.role == 'contributor'
+            request.user.is_authenticated
+            and request.user.role == 'contributor'
         )

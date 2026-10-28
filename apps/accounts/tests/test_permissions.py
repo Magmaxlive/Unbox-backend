@@ -2,6 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 from apps.accounts.permissions import IsAdminRole,IsContributorRole
 from apps.accounts.models import User
+from rest_framework.request import Request
 
 class RolePermissionTests(TestCase):
     def setUp(self):
@@ -20,7 +21,9 @@ class RolePermissionTests(TestCase):
     def check_permissions(self,permission_class,user):
         request = self.factory.get('/')
         force_authenticate(request,user=user)
-        return permission_class().has_permission(request,None)
+        drf_request = Request(request)
+        drf_request.user = user
+        return permission_class().has_permission(drf_request,None)
 
     def test_admin_permission(self):
         self.assertTrue(
