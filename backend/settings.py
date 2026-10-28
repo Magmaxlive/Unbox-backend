@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     # Third party
     'rest_framework',
     'corsheaders',
-    'drf_spectacular'
+    'drf_spectacular',
+    "rest_framework_simplejwt.token_blacklist",
 ]
 
 MIDDLEWARE = [
@@ -156,4 +157,16 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Unbox API",
     "DESCRIPTION": "API documentation for the Unbox platform.",
     "VERSION": "1.0.0",
+}
+
+# token blacklisting and rotation
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
