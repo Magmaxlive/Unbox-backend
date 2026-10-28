@@ -31,3 +31,13 @@ class RolePermissionTests(TestCase):
         self.assertFalse(
             self.check_permissions(IsAdminRole,self.contributor)
         )
+
+    def test_contributor_permission(self):
+        self.assertTrue(
+            self.check_permissions(IsContributorRole,self.contributor)
+        )
+
+    def test_admin_denied_contributor_permission(self):
+        self.assertFalse(
+            self.check_permissions(IsContributorRole,self.admin)
+        )
