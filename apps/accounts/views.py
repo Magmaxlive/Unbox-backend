@@ -1,15 +1,36 @@
 from django.shortcuts import render
 from rest_framework import generics,permissions,status
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView,TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import InvalidToken,TokenError
 from .serializers import *
 from django.conf import settings
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework.decorators import api_view,permission_classes,authentication_classes
+from .permissions import enforce_csrf
+
 
 # Create your views here.
+@ensure_csrf_cookie
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+@authentication_classes([])
+def csrf_token_view(request):
+    return Response({
+        'csrfToken':get_token(request)
+    })
+
+
+
 class LoginView(TokenObtainPairView):
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
+        enforce_csrf(request)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -50,4 +71,109 @@ class CurrentUserView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+class CookieTokenRefreshView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self,request):
+        enforce_csrf(request)
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        if not refresh_token:
+            return Response(
+                {'detail' : 'Refresh Token missing'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        serializer = TokenRefreshSerializer(
+            data = {'refresh':refresh_token}
+        )
+
+        try:
+            serializer.is_valid(raise_exception=True)
+
+        except (InvalidToken,TokenError):
+            response = Response (
+                {'error':'Invalid refresh token or expired'},
+                status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            response.delete_cookie(
+                'access_token',
+                path='/',
+                samesite='Lax'
+            )
+
+            response.delete_cookie(
+                'refresh_token',
+                path='/api/v1/auth/',
+                samesite='Lax'
+            )
+
+            return response
+
+        tokens = serializer.validated_data
+
+        response = Response(
+            {'message':'Token refreshed successfully'},
+            status=status.HTTP_200_OK
+        )
+
+        response.set_cookie(
+            key="access_token",
+            value=tokens["access"],
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite="Lax",
+            path="/",
+            max_age=15 * 60,
+        )
+
+        if "refresh" in tokens:
+            response.set_cookie(
+                key="refresh_token",
+                value=tokens["refresh"],
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite="Lax",
+                path="/api/v1/auth/",
+                max_age=7 * 24 * 60 * 60,
+            )
+
+        return response
+
+class LogoutView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self,request):
+        enforce_csrf(request)
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        response = Response(
+            {'message':'Logged out Successfully'},
+            status=status.HTTP_200_OK,
+        )
+
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except(InvalidToken,TokenError) :
+                pass
+
+        response.delete_cookie(
+            'access_token',
+            path='/',
+            samesite='Lax'
+        )
+
+        response.delete_cookie(
+            'refresh_token',
+            path='/api/v1/auth/',
+            samesite='Lax'
+        )
+
+        return response
+
 
