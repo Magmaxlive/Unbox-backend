@@ -24,3 +24,13 @@ class IsAdminRole(BasePermission):
         )
 
 
+class IsContributorRole(BasePermission):
+    message = 'Contributor access required'
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            user
+            and user.is_authenticated
+            and user.role == 'contributor'
+        )
