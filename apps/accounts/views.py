@@ -8,8 +8,23 @@ from rest_framework_simplejwt.exceptions import InvalidToken,TokenError
 from .serializers import *
 from django.conf import settings
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework.decorators import api_view,permission_classes,authentication_classes
+
 
 # Create your views here.
+@ensure_csrf_cookie
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+@authentication_classes([])
+def csrf_token_view(request):
+    return Response({
+        'csrfToken':get_token(request)
+    })
+
+
+
 class LoginView(TokenObtainPairView):
     serializer_class = LoginSerializer
 
@@ -125,7 +140,6 @@ class CookieTokenRefreshView(APIView):
 
         return response
 
-
 class LogoutView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -157,3 +171,5 @@ class LogoutView(APIView):
         )
 
         return response
+
+
