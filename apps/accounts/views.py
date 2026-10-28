@@ -11,6 +11,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import api_view,permission_classes,authentication_classes
+from .permissions import enforce_csrf
 
 
 # Create your views here.
@@ -29,6 +30,7 @@ class LoginView(TokenObtainPairView):
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
+        enforce_csrf(request)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -75,6 +77,7 @@ class CookieTokenRefreshView(APIView):
     authentication_classes = []
 
     def post(self,request):
+        enforce_csrf(request)
         refresh_token = request.COOKIES.get('refresh_token')
 
         if not refresh_token:
@@ -145,6 +148,7 @@ class LogoutView(APIView):
     authentication_classes = []
 
     def post(self,request):
+        enforce_csrf(request)
         refresh_token = request.COOKIES.get('refresh_token')
 
         response = Response(
