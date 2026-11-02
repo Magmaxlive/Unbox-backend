@@ -4,8 +4,12 @@ from django.urls import path,include
 from drf_spectacular.views import (SpectacularAPIView,SpectacularSwaggerView)
 
 urlpatterns = [
+    # auth
     path('admin/', admin.site.urls),
     path('api/v1/auth/',include('apps.accounts.urls')),
+
+    # category
+    path('api/v1/category/',include('apps.categories.urls')),
 
     # drf spectacular
     path('api/schema/',SpectacularAPIView.as_view(),name='schema'),

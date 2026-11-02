@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributorRole
+from apps.accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributorRole
 from rest_framework import generics
 from .serializers import *
 
