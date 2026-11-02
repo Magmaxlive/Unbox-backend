@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser,BaseUserManager
-
+import uuid
 
 class UserManager(BaseUserManager):
     def create_user(self,email,password=None,**extra_fields):
@@ -33,6 +33,12 @@ class User(AbstractUser):
         ADMIN = 'admin','Admin'
         CONTRIBUTOR = 'contributor','Contributor'
 
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
     username = None
 
     email = models.EmailField(unique=True)
@@ -49,3 +55,4 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
