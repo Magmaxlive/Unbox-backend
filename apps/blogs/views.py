@@ -2,7 +2,7 @@ from django.shortcuts import render
 from .models import Blog
 from rest_framework import generics
 from .serializers import BlogSerializer
-from accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributorRole
+from apps.accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributorRole,IsOwnerOrAdmin
 from rest_framework.permissions import IsAuthenticated
 
 
@@ -21,3 +21,22 @@ class Blog_list_create_View(generics.ListCreateAPIView):
         
     def perform_create(self, serializer):
         return serializer.save(contributor=self.request.user)   
+
+
+class BlogDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BlogSerializer
+    permission_classes = [IsAuthenticated,IsOwnerOrAdmin]
+    lookup_field = 'id'
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Blog.objects.select_related(
+            "contributor",
+            "category",
+            "cover_image",
+        )
+
+        if user.role == 'admin':
+            return queryset
+        return queryset.filter(contributor=user)
+        

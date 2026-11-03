@@ -42,3 +42,34 @@ class IsAdminOrReadOnly(BasePermission):
             return True
         
         return request.user.role == 'admin'
+
+
+class IsOwnerOrAdmin(BasePermission):
+    message = "You do not have permission to perform this action."
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+
+        if user.role == 'admin':
+            if request.method == 'DELETE':
+                if obj.status not in [
+                    obj.Status.DRAFT,
+                    obj.Status.REJECTED,
+                ]:
+                    self.message = "Only draft or rejected content can be deleted."
+                    return False
+            return True
+
+        if obj.contributor_id != user.id:
+            self.message = 'You do not have permission to access this content.'
+            return False
+        
+        if request.method in SAFE_METHODS:
+            return True
+        
+        if obj.status not in [
+                obj.Status.DRAFT,
+                obj.Status.REJECTED,
+            ]:
+            self.message = 'You can only edit or delete draft or rejected content.'
+            return False
+        return True
