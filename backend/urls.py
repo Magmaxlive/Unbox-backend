@@ -11,6 +11,9 @@ urlpatterns = [
     # category
     path('api/v1/category/',include('apps.categories.urls')),
 
+    # blogs
+    path('api/v1/blogs/',include('apps.blogs.urls')),
+
     # drf spectacular
     path('api/schema/',SpectacularAPIView.as_view(),name='schema'),
     path('api/docs/',SpectacularSwaggerView.as_view(url_name='schema'),name='swagger-ui')

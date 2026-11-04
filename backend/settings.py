@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'apps.moderation',
     'apps.uploads',
     'apps.media_assets',
+    'apps.core',
 
     # Third party
     'rest_framework',
