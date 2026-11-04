@@ -4,11 +4,13 @@ from rest_framework import generics,filters
 from .serializers import *
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import ProtectedError
+from apps.core.pagination import StandardResultsPagination
 
 
 class Category_list_create_view(generics.ListCreateAPIView):
     serializer_class = Category_serializer
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = StandardResultsPagination
     filter_backends = [DjangoFilterBackend,filters.SearchFilter]
     filterset_fields = ['is_active']
     search_fields = ['name','description']
