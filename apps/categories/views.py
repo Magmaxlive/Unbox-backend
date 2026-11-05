@@ -16,7 +16,7 @@ class Category_list_create_view(generics.ListCreateAPIView):
     search_fields = ['name','description']
 
     def get_queryset(self):
-        queryset = Category.objects.select_related('created_by')
+        queryset = Category.objects.select_related('created_by').order_by('-created_at')
 
         if self.request.user.role != 'admin':
             queryset = queryset.filter(is_active = True)

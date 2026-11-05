@@ -12,7 +12,7 @@ class Blog(models.Model):
 
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     contributor = models.ForeignKey('accounts.User',on_delete=models.PROTECT,related_name='blogs')
-    category = models.ForeignKey('categories.Category',on_delete=models.PROTECT,related_name='blogs',blank=True)
+    category = models.ForeignKey('categories.Category',on_delete=models.PROTECT,related_name='blogs',blank=True,null=True)
     title = models.CharField(max_length=300)
     slug = models.SlugField(max_length=300,blank=True,unique=True)
     content = models.TextField()
