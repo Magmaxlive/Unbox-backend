@@ -8,7 +8,7 @@ class Category_serializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ['id','name','slug','color_name','color_hex','text_color_hex','created_by','created_at','description','updated_at','is_active','created_by_name',]
-        read_only_fields = ['id','slug','created_by','created_at','updated_at','created_by_name',]
+        read_only_fields = ['id','created_by','created_at','updated_at','created_by_name',]
 
     def validate_color_hex(self, value):
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
@@ -18,6 +18,7 @@ class Category_serializer(serializers.ModelSerializer):
 
         return value.upper()
 
+
     def validate_text_color_hex(self, value):
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
             raise serializers.ValidationError(
@@ -26,4 +27,8 @@ class Category_serializer(serializers.ModelSerializer):
 
         return value.upper()
 
-    
+class CategorySummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id','name','color_hex','text_color_hex']
+        read_only_fields = fields
