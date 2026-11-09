@@ -8,7 +8,7 @@ class Blogfilter(django_filters.FilterSet):
     )
 
     created_before = django_filters.filters.IsoDateTimeFilter(
-        field_name='created_at'
+        field_name='created_at',
         lookup_expr='lt'
     )
 

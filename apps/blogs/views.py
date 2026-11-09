@@ -6,6 +6,7 @@ from apps.accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributo
 from rest_framework.permissions import IsAuthenticated
 from apps.core.pagination import StandardResultsPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from .filters import Blogfilter
 
 
 
@@ -15,8 +16,8 @@ class Blog_list_create_View(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsPagination
     filter_backends = [DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter]
-    filterset_fields = ['status','category']
-    search_fields = ['title']
+    filterset_class = Blogfilter
+    search_fields = ['title','contributor__name']
     ordering_fields = ['created_at','published_at','updated_at']
 
     def get_queryset(self):
