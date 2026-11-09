@@ -3,8 +3,15 @@ from apps.accounts.permissions import IsAdminOrReadOnly,IsAdminRole,IsContributo
 from rest_framework import generics,filters
 from .serializers import *
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError,Count
 from apps.core.pagination import StandardResultsPagination
+
+
+def annotate_usage(queryset):
+    return queryset.annotate(
+        blog_count = Count('blogs',distinct=True),
+        video_count = Count('videos',distinct=True)
+    )
 
 
 class Category_list_create_view(generics.ListCreateAPIView):
@@ -16,7 +23,7 @@ class Category_list_create_view(generics.ListCreateAPIView):
     search_fields = ['name','description']
 
     def get_queryset(self):
-        queryset = Category.objects.select_related('created_by').order_by('-created_at')
+        queryset = annotate_usage(Category.objects.select_related('created_by')).order_by('-created_at')
 
         if self.request.user.role != 'admin':
             queryset = queryset.filter(is_active = True)
@@ -32,7 +39,7 @@ class Category_detailView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = 'id'
 
     def get_queryset(self):
-        queryset = Category.objects.select_related('created_by')
+        queryset = annotate_usage(Category.objects.select_related('created_by'))
         if self.request.user.role != 'admin':
             queryset = queryset.filter(is_active=True)
         return queryset
