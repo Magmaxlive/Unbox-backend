@@ -1,5 +1,5 @@
 from django.db import models
-
+from apps.core.sanitize import rich_text_is_empty
 from apps.moderation.models import EditorialContent
 
 
@@ -21,6 +21,16 @@ class Blog(EditorialContent):
     class Meta:
         db_table = 'blogs'
         ordering = ['-created_at']
+
+    def get_submission_errors(self):
+        errors = {}
+
+        if not self.category_id:
+            errors['category'] = 'Choose a category before submitting'
+
+        if rich_text_is_empty(self.content):
+            errors['content'] = 'Content cannot be empty'
+        return errors
 
     def __str__(self):
         return self.title

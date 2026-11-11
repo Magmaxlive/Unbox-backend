@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.core.pagination import StandardResultsPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import Blogfilter
-
+from apps.moderation.permissions import EditorialContentPermission
 
 
 # Create your views here.
@@ -22,7 +22,7 @@ class Blog_list_create_View(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Blog.objects.select_related('contributor','category','cover_image').order_by('-created_at')
+        queryset = Blog.objects.visible_to(user).select_related('contributor','category','cover_image').order_by('-created_at')
 
         if user.role == 'admin':
             return queryset
@@ -35,12 +35,12 @@ class Blog_list_create_View(generics.ListCreateAPIView):
 
 class BlogDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BlogSerializer
-    permission_classes = [IsAuthenticated,IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated,EditorialContentPermission]
     lookup_field = 'id'
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Blog.objects.select_related(
+        queryset = Blog.objects.visible_to(user).select_related(
             "contributor",
             "category",
             "cover_image",

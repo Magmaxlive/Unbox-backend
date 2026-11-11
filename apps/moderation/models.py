@@ -10,7 +10,7 @@ from django.db.models import Q
 class EditorialQuerySet(models.QuerySet):
     def visible_to(self,user):
         if getattr(user,'role',None) == 'admin':
-            return self.exclude(Q(status='draft') & -Q(contributor=user))
+            return self.exclude(Q(status='draft') & ~Q(contributor=user))
         return self.filter(contributor=user)
 
 class EditorialContent(models.Model):
@@ -60,6 +60,9 @@ class EditorialContent(models.Model):
         if not self.slug:
             self.slug = self._generate_unique_slug()
         super().save(*args, **kwargs)
+
+    def get_submission_errors(self):
+        return {}
 
 
 class ContentActivity(models.Model):
