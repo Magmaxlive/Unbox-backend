@@ -8,6 +8,7 @@ from apps.core.pagination import StandardResultsPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import Blogfilter
 from apps.moderation.permissions import EditorialContentPermission
+from apps.moderation.views import EditorialTransitionView
 
 
 # Create your views here.
@@ -49,4 +50,8 @@ class BlogDetailView(generics.RetrieveUpdateDestroyAPIView):
         if user.role == 'admin':
             return queryset
         return queryset.filter(contributor=user)
-        
+
+
+class BlogTransitionView(EditorialTransitionView):
+    model = Blog
+    serializer_class = BlogSerializer
