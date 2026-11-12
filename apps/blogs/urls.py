@@ -13,4 +13,7 @@ urlpatterns = [
     path('<uuid:id>/archive/',BlogTransitionView.as_view(transition='archive'),name='blog-archive'),
     path('<uuid:id>/restore/',BlogTransitionView.as_view(transition='restore'),name='blog-restore'),
 
+    # history
+    path('<uuid:id>/activity/',BlogActivityView.as_view(),name='blog-activity')
+
 ]
