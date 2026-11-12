@@ -9,10 +9,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .filters import Blogfilter
 from apps.moderation.permissions import EditorialContentPermission
 from apps.moderation.views import EditorialTransitionView
+from apps.moderation.mixins import EditorialActivityMixin
 
 
 # Create your views here.
-class Blog_list_create_View(generics.ListCreateAPIView):
+class Blog_list_create_View(EditorialActivityMixin,generics.ListCreateAPIView):
     serializer_class = BlogSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsPagination
@@ -29,12 +30,10 @@ class Blog_list_create_View(generics.ListCreateAPIView):
             return queryset
 
         return queryset.filter(contributor=user)
-        
-    def perform_create(self, serializer):
-        return serializer.save(contributor=self.request.user)   
+      
 
 
-class BlogDetailView(generics.RetrieveUpdateDestroyAPIView):
+class BlogDetailView(EditorialActivityMixin,generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BlogSerializer
     permission_classes = [IsAuthenticated,EditorialContentPermission]
     lookup_field = 'id'
