@@ -80,7 +80,7 @@ def get_delete_denial(user,content):
 
     return "Drafts can only be deleted by its author"
 
-def get_transaction_denial(user,content,transition):
+def get_transition_denial(user,content,transition):
     status = content.status
     author = is_author(user,content)
     admin = is_admin(user)
