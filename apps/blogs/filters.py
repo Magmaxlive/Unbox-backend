@@ -12,6 +12,8 @@ class Blogfilter(django_filters.FilterSet):
         lookup_expr='lt'
     )
 
+    category_slug = django_filters.CharFilter(field_name='category__slug')
+
     class Meta:
         model = Blog
         fields = ['status','category']
