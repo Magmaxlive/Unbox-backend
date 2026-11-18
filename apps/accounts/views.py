@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from rest_framework import generics,permissions,status
+from rest_framework import generics,permissions,status,filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView,TokenRefreshView
@@ -11,7 +11,9 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import api_view,permission_classes,authentication_classes
-from .permissions import enforce_csrf
+from .permissions import enforce_csrf,IsAdminRole
+from apps.core.pagination import StandardResultsPagination
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 # Create your views here.
@@ -177,3 +179,11 @@ class LogoutView(APIView):
         return response
 
 
+class UsersListCreateview(generics.ListAPIView):
+    pagination_class = StandardResultsPagination
+    permission_classes = [permissions.IsAuthenticated,IsAdminRole]
+    queryset = User.objects.all().order_by('-id')
+    serializer_class = UserSerializer
+    filter_backends = [DjangoFilterBackend,filters.SearchFilter,filters.OrderingFilter]
+    filterset_fields = ['role']
+    search_fields = ['name','email']
