@@ -29,6 +29,7 @@ class ImageUploadRequestSerializer(serializers.Serializer):
 class MediaAssetSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.CharField(source='uploaded_by.name',read_only=True)
 
     class Meta:
         model = Media_asset
@@ -46,6 +47,7 @@ class MediaAssetSerializer(serializers.ModelSerializer):
             'url',
             'thumbnail_url',
             'uploaded_by',
+            'uploaded_by_name',
             'created_at', 
         ]
         read_only_fields = fields
