@@ -28,6 +28,9 @@ class Blog(EditorialContent):
         if not self.category_id:
             errors['category'] = 'Choose a category before submitting'
 
+        if not self.cover_image:
+            errors['cover_image'] = 'Add a cover image before submitting'
+
         if rich_text_is_empty(self.content):
             errors['content'] = 'Content cannot be empty'
         return errors
