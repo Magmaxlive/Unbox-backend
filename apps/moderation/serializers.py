@@ -12,3 +12,37 @@ class ContentActivitySerializer(serializers.ModelSerializer):
 
     def get_actor_name(self,obj):
         return obj.actor.name if obj.actor else None
+
+
+class LockedRequiredFieldsMixin:
+    """
+    Once content has passed the submission checks (pending, published or
+    archived), its required fields may be replaced but not removed.
+
+    Subclasses set:
+        LOCKED_REQUIRED_FIELDS = {'field_name': ('label', 'verb')}
+    e.g. {'cover_image': ('cover image', 'replaced')}
+    """
+    LOCKED_REQUIRED_FIELDS = {}
+    LOCKED_STATUSES = ('pending','published','achieved')
+
+    def validate(self,attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self,'instance',None)
+
+        if instance is not None and instance.status in self.LOCKED_STATUSES:
+            status_label = instance.get_status_display().lower()
+            content_label = instance._meta.verbose_name
+            errors = {}
+
+            for field, (label, verb) in self.LOCKED_REQUIRED_FIELDS.items():
+                removing = field in attrs and attrs[field] is None
+                if removing and getattr(instance, f'{field}_id'):
+                    errors[field] = (
+                        f"A {status_label} {content_label}'s {label} can be {verb} but not removed."
+                    )
+
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        return attrs
