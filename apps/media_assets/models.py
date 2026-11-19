@@ -33,6 +33,12 @@ class Media_asset(models.Model):
     width = models.PositiveIntegerField(null=True,blank=True)
     height = models.PositiveIntegerField(null=True,blank=True)
 
+    # videos : measured length in seconds
+    duration = models.DecimalField(max_digits=7, decimal_places=2, null=True,blank=True)
+
+    # videos: the MediaConvert job processing this upload
+    processing_job_id = models.CharField(max_length=100,blank=True)
+
     # generated public versions, e.g.
     # {"thumb": {"key": "public/...-thumb.webp", "width": 400, "height": 225}, "large": {...}}
     variants = models.JSONField(default=dict, blank=True)
