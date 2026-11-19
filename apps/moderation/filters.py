@@ -1,6 +1,6 @@
 import django_filters
 
-class EditorialContentFilter(django_filters.filterset):
+class EditorialContentFilter(django_filters.FilterSet):
     """
     Filters shared by editorial content lists (blogs, videos).
     Subclasses add their own Meta (model + exact-match fields).
