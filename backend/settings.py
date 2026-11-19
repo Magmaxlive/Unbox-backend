@@ -181,3 +181,29 @@ CORS_ALLOW_CREDENTIALS = env.bool(
     'CORS_ALLOW_CREDENTIALS',
     default=True
 )
+
+
+# AWS CREDENTIALS
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID',default='')
+AWS_SECRET_ACCESS_KEY  = env('AWS_SECRET_ACCESS_KEY',default='')
+AWS_S3_REGION = env('AWS_S3_REGION', default='')
+AWS_S3_BUCKET = env('AWS_S3_BUCKET', default='')
+
+# cloudFront domain 
+MEDIA_CDN_URL = env('MEDIA_CDN_URL', default='').rstrip('/')
+
+# How long a presigned upload form stays valid
+MEDIA_UPLOAD_URL_EXPIRY_SECONDS = 600
+
+# Images
+MEDIA_MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+MEDIA_ALLOWED_IMAGE_TYPES = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+}
+# generated versions: name -> max width in pixels (WebP)
+MEDIA_IMAGE_VARIANTS = {
+    'thumb': 400,
+    'large': 1600,
+}

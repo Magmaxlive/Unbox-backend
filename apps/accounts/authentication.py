@@ -21,7 +21,8 @@ class CookieJWTAuthentication(JWTAuthentication):
         try:
             validated_token = self.get_validated_token(token)
             user = self.get_user(validated_token)
-            return (user,validated_token)
-        
         except(InvalidToken,TokenError):
             return None
+
+        self.enforce_csrf(request)
+        return (user,validated_token)

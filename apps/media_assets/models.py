@@ -20,15 +20,27 @@ class Media_asset(models.Model):
 
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     uploaded_by = models.ForeignKey('accounts.User',on_delete=models.PROTECT,related_name='media_assets')
+
     bucket_name = models.CharField(max_length=200)
     storage_key = models.CharField(max_length=500,unique=True)
+
     file_name = models.CharField(max_length=255)
     file_size = models.PositiveBigIntegerField()
     mime_type = models.CharField(max_length=100)
     media_type = models.CharField(max_length=50,choices=MediaType.choices)
-    status = models.CharField(max_length=20,choices=Status.choices)
+    status = models.CharField(max_length=20,choices=Status.choices,default=Status.PENDING)
+
     width = models.PositiveIntegerField(null=True,blank=True)
     height = models.PositiveIntegerField(null=True,blank=True)
+
+    # generated public versions, e.g.
+    # {"thumb": {"key": "public/...-thumb.webp", "width": 400, "height": 225}, "large": {...}}
+    variants = models.JSONField(default=dict, blank=True)
+    alt_text = models.CharField(max_length=300,blank=True)
+
+    # why processing failed, shown to the uploader
+    failure_reason = models.CharField(max_length=300,blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

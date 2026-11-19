@@ -26,7 +26,7 @@ def get_edit_denial(user,content):
 
     if is_author(user,content):
         # admin can edit their own content in any status
-        if is_admin(user) or status in (Status.DRAFT or Status.REJECTED):
+        if is_admin(user) or status in (Status.DRAFT , Status.REJECTED):
             return None
 
         if status == Status.PENDING:
