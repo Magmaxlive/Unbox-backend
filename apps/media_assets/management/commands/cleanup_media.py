@@ -135,3 +135,7 @@ class Command(BaseCommand):
 
         verb = 'would be removed' if dry_run else 'removed'
         self.stdout.write(f'{label}: {removed} {verb} ({format_size(total_bytes)})')
+
+
+        
+
