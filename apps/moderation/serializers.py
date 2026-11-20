@@ -69,3 +69,6 @@ class BulkCategorySerializer(BulkActionSerializer):
         if not value.is_active:
             raise serializers.ValidationError('Choose an active category.')
         return value
+
+
+

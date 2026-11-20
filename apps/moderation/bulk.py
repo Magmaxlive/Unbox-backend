@@ -10,6 +10,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from .models import ContentActivity, EditorialContent
 from .rules import get_edit_denial, is_author
 from .services import perform_transition
+from .rules import get_delete_denial, get_edit_denial, is_author
 
 Status = EditorialContent.Status
 
@@ -52,7 +53,12 @@ def bulk_transition(model, user, ids, transition):
 
 
 def bulk_change_category(model, user, ids, category):
-    """Move many items to `category`. Drafts are never changed by bulk actions."""
+    """
+    Move many items to `category`, using the normal edit rules per item.
+    Drafts are included for their author only (others' drafts are never
+    visible); e.g. contributors: own drafts + rejected; admins: own drafts
+    plus anyone's pending, published or archived.
+    """
     items = _load_visible(model, user, ids)
     succeeded, skipped = [], []
 
@@ -66,9 +72,7 @@ def bulk_change_category(model, user, ids, category):
             # re-read under a lock so the checks use the latest state
             locked = type(obj).objects.select_for_update().select_related('category').get(pk=pk)
 
-            if locked.status == Status.DRAFT:
-                reason = 'Drafts are not changed by bulk actions.'
-            elif locked.category_id == category.pk:
+            if locked.category_id == category.pk:
                 reason = 'Already in this category.'
             else:
                 reason = get_edit_denial(user, locked)
@@ -90,6 +94,44 @@ def bulk_change_category(model, user, ids, category):
                     changed_fields=['category'],
                     note=f'Moved from {old_name} to {category.name}.',
                 )
+
+        succeeded.append(str(pk))
+
+    return {'succeeded': succeeded, 'skipped': skipped}
+
+
+def bulk_delete(model, user, ids):
+    """
+    Permanently delete many items, using the normal delete rules per item.
+    Drafts are included for their author only; e.g. contributors: own drafts
+    + rejected; admins: own drafts plus anyone's rejected or archived.
+    """
+    items = _load_visible(model, user, ids)
+    succeeded, skipped = [], []
+
+    for pk in ids:
+        obj = items.get(pk)
+        if obj is None:
+            skipped.append({'id': str(pk), 'title': '', 'reason': 'Not found.'})
+            continue
+
+        with transaction.atomic():
+            # re-read under a lock so the checks use the latest state
+            locked = type(obj).objects.select_for_update().get(pk=pk)
+
+            reason = get_delete_denial(user, locked)
+            if reason:
+                skipped.append({'id': str(pk), 'title': locked.title, 'reason': reason})
+                continue
+
+            # record first: after delete() the id/title/status are gone
+            ContentActivity.record(
+                locked,
+                user,
+                ContentActivity.Action.DELETED,
+                from_status=locked.status,
+            )
+            locked.delete()
 
         succeeded.append(str(pk))
 

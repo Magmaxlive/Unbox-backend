@@ -12,7 +12,7 @@ from .rules import get_view_denial
 from .serializers import ContentActivitySerializer
 from .services import perform_transition
 from apps.accounts.permissions import IsAdminRole
-from .bulk import bulk_change_category,bulk_transition
+from .bulk import bulk_change_category,bulk_transition,bulk_delete
 from .serializers import BulkActionSerializer,BulkCategorySerializer
 
 # Create your views here.
@@ -89,4 +89,25 @@ class EditorialBulkCategoryView(APIView):
             serializer.validated_data['category']
         )
 
+        return Response(result)
+
+
+class EditorialBulkDeleteView(APIView):
+    """
+    POST /<content>/bulk/delete/   {"ids": [...]}
+    Admin-only, permanent. Subclasses set `model`.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    model = None
+
+    def post(self, request):
+        serializer = BulkActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = bulk_delete(
+            self.model,
+            request.user,
+            serializer.validated_data['ids'],
+        )
         return Response(result)
