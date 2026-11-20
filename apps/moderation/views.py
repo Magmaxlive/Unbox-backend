@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .services import perform_transition
 from rest_framework import generics
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied,ValidationError
 from rest_framework.permissions import IsAuthenticated
 
 from apps.core.pagination import StandardResultsPagination
@@ -11,6 +11,9 @@ from .models import ContentActivity
 from .rules import get_view_denial
 from .serializers import ContentActivitySerializer
 from .services import perform_transition
+from apps.accounts.permissions import IsAdminRole
+from .bulk import bulk_change_category,bulk_transition
+from .serializers import BulkActionSerializer,BulkCategorySerializer
 
 # Create your views here.
 class EditorialTransitionView(APIView):
@@ -46,3 +49,44 @@ class EditorialActivityListView(generics.ListAPIView):
             raise PermissionDenied(denial)
         
         return ContentActivity.for_content(content)
+
+
+class EditorialBulkTransitionView(APIView):
+    permission_classes = [IsAuthenticated,IsAdminRole]
+    model = None
+    transition = None
+    ALLOWED_TRANSITIONS = ('archive','restore')
+
+    def post(self,request):
+        if self.transition not in self.ALLOWED_TRANSITIONS:
+            raise ValidationError({'detail':'This bulk action is not available.'})
+
+        serializer = BulkActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = bulk_transition(
+            self.model,
+            request.user,
+            serializer.validated_data['ids'],
+            self.transition,
+        )
+
+        return Response(result)
+
+
+class EditorialBulkCategoryView(APIView):
+    permission_classes = [IsAuthenticated,IsAdminRole]
+    model = None
+
+    def post(self,request):
+        serializer = BulkCategorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = bulk_change_category(
+            self.model,
+            request.user,
+            serializer.validated_data['ids'],
+            serializer.validated_data['category']
+        )
+
+        return Response(result)
