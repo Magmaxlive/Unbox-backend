@@ -18,7 +18,7 @@ urlpatterns = [
     path('api/v1/media/',include('apps.media_assets.urls')),
 
     # video
-    path('api/v1/video/',include('apps.video.urls')),
+    path('api/v1/videos/',include('apps.videos.urls')),
 
     # drf spectacular
     path('api/schema/',SpectacularAPIView.as_view(),name='schema'),

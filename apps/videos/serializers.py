@@ -7,7 +7,7 @@ from apps.categories.serializers import CategorySummarySerializer
 
 class VideoSerializer(LockedRequiredFieldsMixin,serializers.ModelSerializer):
     category_detail = CategorySummarySerializer(source = 'category',read_only=True)
-    contributor_name = serializers.SerializerMethodField(source = 'contributor.name',read_only=True)
+    contributor_name = serializers.CharField(source = 'contributor.name',read_only=True)
     thumbnail_detail = MediaImageSummarySerializer(source = 'thumbnail',read_only=True)
 
     description = serializers.CharField(max_length=5000,allow_blank=True,required=False)

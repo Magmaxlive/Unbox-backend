@@ -13,7 +13,7 @@ from .models import Video
 
 RELATED = ('contributor','category','thumbnail','media_asset')
 
-class VideoListCreateView(generics.ListCreateAPIView,EditorialActivityListView):
+class VideoListCreateView(EditorialActivityMixin,generics.ListCreateAPIView):
     serializer_class = VideoSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsPagination
