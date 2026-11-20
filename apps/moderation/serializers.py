@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import ContentActivity
+from apps.categories.models import Category
 
 class ContentActivitySerializer(serializers.ModelSerializer):
     action_label = serializers.CharField(source='get_action_display',read_only=True)
@@ -46,3 +47,25 @@ class LockedRequiredFieldsMixin:
                 raise serializers.ValidationError(errors)
 
         return attrs
+
+
+class BulkActionSerializer(serializers.Serializer):
+    """Input for bulk actions: up to 50 ids, duplicates removed (order kept)."""
+    ids = serializers.ListField(
+        child = serializers.UUIDField(),
+        allow_empty=False,
+        max_length=50
+    )
+
+    def validate_ids(self,value):
+        return list(dict.fromkeys(value))
+
+
+class BulkCategorySerializer(BulkActionSerializer):
+    """Input for bulk category change: ids + an active destination category."""
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+
+    def validate_category(self,value):
+        if not value.is_active:
+            raise serializers.ValidationError('Choose an active category.')
+        return value
