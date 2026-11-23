@@ -1,6 +1,7 @@
 
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -207,3 +208,13 @@ MEDIA_IMAGE_VARIANTS = {
     'thumb': 400,
     'large': 1600,
 }
+
+# Embedded videos: check links exist via each platform's oEmbed lookup.
+# Turn off for offline development or automated tests.
+VIDEO_EMBED_CHECK = os.getenv('VIDEO_EMBED_CHECK','True') == 'True'
+
+# Meta versions its Graph API; update here when Meta retires this version.
+INSTAGRAM_OEMBED_URL = os.getenv(
+    'INSTAGRAM_OEMBED_URL',
+    'https://graph.facebook.com/v26.0/instagram_oembed',
+)
