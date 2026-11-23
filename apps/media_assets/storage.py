@@ -141,3 +141,63 @@ def public_url(key):
         raise ImproperlyConfigured('MEDIA_CDN_URL must be set (see .env).')
 
     return f'{settings.MEDIA_CDN_URL}/{key[len(PUBLIC_PREFIX):]}'
+
+
+def create_multipart_upload(key, content_type):
+    """Start an S3 multipart upload; returns S3's UploadId."""
+    response = get_s3_client().create_multipart_upload(
+        Bucket=settings.AWS_S3_BUCKET,
+        Key=key,
+        ContentType=content_type,
+    )
+    return response['UploadId']
+
+
+def presign_upload_part(key, upload_id, part_number, expires_in):
+    """A URL the browser can PUT one part to."""
+    return get_s3_client().generate_presigned_url(
+        'upload_part',
+        Params={
+            'Bucket': settings.AWS_S3_BUCKET,
+            'Key': key,
+            'UploadId': upload_id,
+            'PartNumber': part_number,
+        },
+        ExpiresIn=expires_in,
+    )
+
+
+def complete_multipart_upload(key, upload_id, parts):
+    """Join the uploaded parts. `parts`: [{'part_number': 1, 'etag': '"…"'}, …] in order."""
+    get_s3_client().complete_multipart_upload(
+        Bucket=settings.AWS_S3_BUCKET,
+        Key=key,
+        UploadId=upload_id,
+        MultipartUpload={
+            'Parts': [{'PartNumber': p['part_number'], 'ETag': p['etag']} for p in parts],
+        },
+    )
+
+
+def abort_multipart_upload(key, upload_id):
+    """Discard an unfinished upload and its parts. Already gone is fine."""
+    try:
+        get_s3_client().abort_multipart_upload(
+            Bucket=settings.AWS_S3_BUCKET,
+            Key=key,
+            UploadId=upload_id,
+        )
+    except ClientError as error:
+        if error.response.get('Error', {}).get('Code') != 'NoSuchUpload':
+            raise
+
+
+def get_object_size(key):
+    """Size in bytes, or None if the object doesn't exist."""
+    try:
+        response = get_s3_client().head_object(Bucket=settings.AWS_S3_BUCKET, Key=key)
+    except ClientError as error:
+        if error.response.get('Error', {}).get('Code') in ('404', 'NoSuchKey', 'NotFound'):
+            return None
+        raise
+    return response['ContentLength']
