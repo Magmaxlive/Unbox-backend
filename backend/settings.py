@@ -218,3 +218,12 @@ INSTAGRAM_OEMBED_URL = os.getenv(
     'INSTAGRAM_OEMBED_URL',
     'https://graph.facebook.com/v26.0/instagram_oembed',
 )
+
+# videos (multipart upload straight to S3)
+MEDIA_MAX_VIDEO_BYTES = 500 * 1024 * 1024   #500 MB
+MEDIA_ALLOWED_VIDEO_TYPES = {
+    'video/mp4' : 'mp4',
+    'video/quicktime' : 'mov'   #iphone recordings
+}
+MEDIA_VIDEO_PART_SIZE = 10 * 1024 * 1024    #10 MB (S3 minimum is 5 MB)
+MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS = 3600  # 1 hour per signed part URL

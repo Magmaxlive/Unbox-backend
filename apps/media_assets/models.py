@@ -24,6 +24,9 @@ class Media_asset(models.Model):
     bucket_name = models.CharField(max_length=200)
     storage_key = models.CharField(max_length=500,unique=True)
 
+    # videos : S3 multipart upload in progress
+    multipart_upload_id = models.CharField(max_length=255,blank=True)
+
     file_name = models.CharField(max_length=255)
     file_size = models.PositiveBigIntegerField()
     mime_type = models.CharField(max_length=100)
