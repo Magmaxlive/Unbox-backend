@@ -1,10 +1,14 @@
 import os
 from io import BytesIO
+import math
+import uuid
 
 from django.conf import settings
 from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 from rest_framework.exceptions import ValidationError
+from django.db import transaction
+from botocore.exceptions import ClientError
 
 from . import storage
 from .models import Media_asset
@@ -223,3 +227,122 @@ def complete_image_upload(asset):
     ])
 
     return asset
+
+
+# ── Videos: multipart uploads ──
+
+def video_part_count(file_size):
+    return max(1, math.ceil(file_size / settings.MEDIA_VIDEO_PART_SIZE))
+
+
+def _video_original_key(extension):
+    now = timezone.now()
+    return f'originals/{now:%Y/%m}/{uuid.uuid4()}.{extension}'
+
+
+def create_video_upload(user, video, file_name, file_size, mime_type):
+    """
+    Start a multipart upload for `video` and attach the new asset to it.
+    The browser then uploads parts straight to S3.
+    """
+    extension = settings.MEDIA_ALLOWED_VIDEO_TYPES[mime_type]
+    key = _video_original_key(extension)
+    upload_id = storage.create_multipart_upload(key, mime_type)
+
+    with transaction.atomic():
+        asset = Media_asset.objects.create(
+            uploaded_by=user,
+            bucket_name=settings.AWS_S3_BUCKET,
+            storage_key=key,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            media_type=Media_asset.MediaType.VIDEO,
+            status=Media_asset.Status.UPLOADING,
+            multipart_upload_id=upload_id,
+        )
+
+        # the new file replaces any earlier upload (that asset becomes unused
+        # and is removed later by cleanup_media)
+        video.media_asset = asset
+        video.duration = None
+        video.save(update_fields=['media_asset', 'duration', 'updated_at'])
+
+    return asset
+
+
+def sign_video_parts(asset, part_numbers):
+    part_count = video_part_count(asset.file_size)
+    if any(not 1 <= number <= part_count for number in part_numbers):
+        raise ValidationError({'part_numbers': f'Part numbers must be between 1 and {part_count}.'})
+
+    return [
+        {
+            'part_number': number,
+            'url': storage.presign_upload_part(
+                asset.storage_key,
+                asset.multipart_upload_id,
+                number,
+                settings.MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS,
+            ),
+        }
+        for number in part_numbers
+    ]
+
+
+def _fail_video_upload(asset, reason):
+    if asset.multipart_upload_id:
+        storage.abort_multipart_upload(asset.storage_key, asset.multipart_upload_id)
+
+    asset.status = Media_asset.Status.FAILED
+    asset.failure_reason = reason
+    asset.multipart_upload_id = ''
+    asset.save(update_fields=['status', 'failure_reason', 'multipart_upload_id', 'updated_at'])
+
+
+def complete_video_upload(asset, parts):
+    """
+    Join the parts, verify the file size, and hand the video to processing.
+    Safe against double completion: the asset is claimed first.
+    """
+    part_count = video_part_count(asset.file_size)
+    numbers = sorted(part['part_number'] for part in parts)
+    if numbers != list(range(1, part_count + 1)):
+        raise ValidationError({'parts': f'All {part_count} parts are needed to finish this upload.'})
+
+    # claim: only one request can move it out of "uploading"
+    claimed = Media_asset.objects.filter(
+        pk=asset.pk,
+        status=Media_asset.Status.UPLOADING,
+    ).update(status=Media_asset.Status.PROCESSING)
+    if not claimed:
+        raise ValidationError({'detail': 'This upload is no longer in progress.'})
+    asset.refresh_from_db()
+
+    try:
+        storage.complete_multipart_upload(
+            asset.storage_key,
+            asset.multipart_upload_id,
+            sorted(parts, key=lambda part: part['part_number']),
+        )
+    except ClientError:
+        _fail_video_upload(asset, 'The upload could not be completed.')
+        raise ValidationError({'detail': 'The upload could not be completed. Please upload the video again.'})
+
+    actual_size = storage.get_object_size(asset.storage_key)
+    if actual_size != asset.file_size:
+        storage.delete_object(asset.storage_key)
+        asset.multipart_upload_id = ''
+        _fail_video_upload(asset, 'The uploaded file did not match the expected size.')
+        raise ValidationError({'detail': 'The uploaded file did not match the expected size. Please upload it again.'})
+
+    asset.multipart_upload_id = ''
+    asset.save(update_fields=['multipart_upload_id', 'updated_at'])
+
+    # V4: start MediaConvert processing here.
+
+    return asset
+
+
+def abort_video_upload(asset):
+    _fail_video_upload(asset, 'Upload cancelled.')
