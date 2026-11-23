@@ -27,18 +27,18 @@ def move_category_content(source,target,user,deactivate_source=False):
                 item.save(update_fields=['category','updated_at'])
 
             # same logging rule as edits: only when the editor isn't the author
-            if not is_author(user,item):
-                ContentActivity.record(
-                    item,
-                    user,
-                    ContentActivity.Action.EDITED,
-                    changed_fields=['category'],
-                    note=f"Moved from {source.name} to {target.name} .",
-                )
-            count +=1
+                if not is_author(user,item):
+                    ContentActivity.record(
+                        item,
+                        user,
+                        ContentActivity.Action.EDITED,
+                        changed_fields=['category'],
+                        note=f"Moved from {source.name} to {target.name} .",
+                    )
+                count +=1
 
-        moved[relation] = count
-        drafts_left[relation] = getattr(source,relation).filter(status=Status.DRAFT).count()
+            moved[relation] = count
+            drafts_left[relation] = getattr(source,relation).filter(status=Status.DRAFT).count()
 
 
         deactivated = False

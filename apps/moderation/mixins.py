@@ -63,3 +63,5 @@ class EditorialActivityMixin:
                 from_status=instance.status
             )
             instance.delete()
+
+
