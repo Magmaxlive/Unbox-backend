@@ -50,3 +50,21 @@ class CategorySummarySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id','name','color_hex','text_color_hex']
         read_only_fields = fields
+
+
+class MoveContentSerializer(serializers.Serializer):
+    """Input for moving all content out of a category (`source` passed in context)."""
+
+    target_category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+    deactivate_source = serializers.BooleanField(default=False)
+
+    def validate_target_category(self, value):
+        if not value.is_active:
+             raise serializers.ValidationError('Choose an active category.')
+        return value
+
+    def validate(self, attrs):
+         source = self.context['source']
+         if attrs['target_category'].pk == source.pk:
+              raise serializers.ValidationError({'target_category':'Choose a diffrent category.'})
+         return super().validate(attrs)
