@@ -30,7 +30,7 @@ def get_edit_denial(user,content):
             return None
 
         if status == Status.PENDING:
-            return 'This content is penind reivew. Withdraw it from review before editing.'
+            return 'This content is pending reivew. Withdraw it from review before editing.'
 
         return 'Published or archieved content can only be changed by admin. Contact an admin if changes are needed.'
 

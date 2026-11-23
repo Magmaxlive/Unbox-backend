@@ -75,7 +75,7 @@ class EditorialBulkTransitionView(APIView):
 
 
 class EditorialBulkCategoryView(APIView):
-    permission_classes = [IsAuthenticated,IsAdminRole]
+    permission_classes = [IsAuthenticated]
     model = None
 
     def post(self,request):
@@ -98,7 +98,7 @@ class EditorialBulkDeleteView(APIView):
     Admin-only, permanent. Subclasses set `model`.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated]
     model = None
 
     def post(self, request):
