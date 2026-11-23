@@ -3,10 +3,19 @@ from rest_framework import status,filters,generics
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+
 from rest_framework.views import APIView
+from .services import (
+    abort_video_upload,
+    complete_video_upload,
+    create_video_upload,
+    sign_video_parts,
+    video_part_count
+)
 
 from .models import Media_asset
-from .serializers import ImageUploadRequestSerializer, MediaAssetSerializer
+from .serializers import ImageUploadRequestSerializer, MediaAssetSerializer,VideoCompleteSerializer,VideoPartSerializer,VideoUploadStartSerializer
 from .services import complete_image_upload, create_image_upload
 from apps.core.pagination import StandardResultsPagination
 
@@ -76,3 +85,85 @@ class MediaAssetDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return visible_media(self.request.user)
+
+
+def _get_own_video_upload(request,id):
+    """An in-progress video upload belonging to this user (404 otherwise)."""
+    asset = get_object_or_404(
+        Media_asset,
+        pk = id,
+        media_type = Media_asset.MediaType.VIDEO,
+        uploaded_by=request.user
+    )
+
+    if asset.status != Media_asset.Status.UPLOADING or not asset.multipart_upload_id:
+        raise ValidationError({'detail':'This upload is no longer in progress.'})
+    return asset
+
+class VideoUploadStartView(APIView):
+    """POST /api/v1/media/video-uploads/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = VideoUploadStartSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        asset = create_video_upload(
+            request.user,
+            data['video'],
+            data['file_name'],
+            data['file_size'],
+            data['mime_type'],
+        )
+
+        return Response(
+            {
+                'asset': MediaAssetSerializer(asset, context={'request': request}).data,
+                'part_size': settings.MEDIA_VIDEO_PART_SIZE,
+                'part_count': video_part_count(asset.file_size),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VideoUploadPartsView(APIView):
+    """POST /api/v1/media/<id>/video/parts/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, id):
+        asset = _get_own_video_upload(request, id)
+
+        serializer = VideoPartsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        urls = sign_video_parts(asset, serializer.validated_data['part_numbers'])
+        return Response({'urls': urls})
+
+
+class VideoUploadCompleteView(APIView):
+    """POST /api/v1/media/<id>/video/complete/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, id):
+        asset = _get_own_video_upload(request, id)
+
+        serializer = VideoCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        asset = complete_video_upload(asset, serializer.validated_data['parts'])
+        return Response(MediaAssetSerializer(asset, context={'request': request}).data)
+
+
+class VideoUploadAbortView(APIView):
+    """POST /api/v1/media/<id>/video/abort/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, id):
+        asset = _get_own_video_upload(request, id)
+        abort_video_upload(asset)
+        return Response(status=status.HTTP_204_NO_CONTENT)
