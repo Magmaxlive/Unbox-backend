@@ -4,6 +4,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from django.conf import settings
+
 
 from rest_framework.views import APIView
 from .services import (
@@ -136,7 +138,7 @@ class VideoUploadPartsView(APIView):
     def post(self, request, id):
         asset = _get_own_video_upload(request, id)
 
-        serializer = VideoPartsSerializer(data=request.data)
+        serializer = VideoPartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         urls = sign_video_parts(asset, serializer.validated_data['part_numbers'])
