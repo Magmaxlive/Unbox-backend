@@ -227,3 +227,7 @@ MEDIA_ALLOWED_VIDEO_TYPES = {
 }
 MEDIA_VIDEO_PART_SIZE = 10 * 1024 * 1024    #10 MB (S3 minimum is 5 MB)
 MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS = 3600  # 1 hour per signed part URL
+
+# media convert (video processing)
+MEDIACONVERT_ROLE_ARN = os.getenv('MEDIACONVERT_ROLE_ARN','')
+MEDIA_VIDEO_STATUS_CHECK_SECONDS = 15  # at most one AWS check per asset per 15 s

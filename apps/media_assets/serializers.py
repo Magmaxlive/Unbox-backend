@@ -115,6 +115,13 @@ class VideoUploadStartSerializer(serializers.Serializer):
             raise serializers.ValidationError(f'Videos must be {limit_mb} MB or smaller.')
         return value
 
+
+    def validate_mime_type(self, value):
+        if value not in settings.MEDIA_ALLOWED_VIDEO_TYPES:
+            raise serializers.ValidationError('Upload an MP4 or MOV video.')
+        return value
+
+
     def validate_video(self, value):
         # imported here: media_assets shouldn't import videos at load time
         from apps.moderation.rules import get_edit_denial

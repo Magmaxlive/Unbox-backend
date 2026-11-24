@@ -14,3 +14,5 @@ urlpatterns = [
     path('<uuid:id>/video/complete/', VideoUploadCompleteView.as_view(), name='media-video-upload-complete'),
     path('<uuid:id>/video/abort/', VideoUploadAbortView.as_view(), name='media-video-upload-abort'),
 ]
+
+

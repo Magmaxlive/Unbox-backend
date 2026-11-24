@@ -17,7 +17,7 @@ from .services import (
 )
 
 from .models import Media_asset
-from .serializers import ImageUploadRequestSerializer, MediaAssetSerializer,VideoCompleteSerializer,VideoPartSerializer,VideoUploadStartSerializer
+from .serializers import ImageUploadRequestSerializer, MediaAssetSerializer,VideoCompleteSerializer,VideoUploadStartSerializer,VideoPartsSerializer
 from .services import complete_image_upload, create_image_upload
 from apps.core.pagination import StandardResultsPagination
 
@@ -138,7 +138,7 @@ class VideoUploadPartsView(APIView):
     def post(self, request, id):
         asset = _get_own_video_upload(request, id)
 
-        serializer = VideoPartSerializer(data=request.data)
+        serializer = VideoPartsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         urls = sign_video_parts(asset, serializer.validated_data['part_numbers'])

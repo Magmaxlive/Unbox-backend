@@ -331,7 +331,7 @@ def complete_video_upload(asset, parts):
 
     actual_size = storage.get_object_size(asset.storage_key)
     if actual_size != asset.file_size:
-        storage.delete_object(asset.storage_key)
+        storage.delete_objects([asset.storage_key])
         asset.multipart_upload_id = ''
         _fail_video_upload(asset, 'The uploaded file did not match the expected size.')
         raise ValidationError({'detail': 'The uploaded file did not match the expected size. Please upload it again.'})
