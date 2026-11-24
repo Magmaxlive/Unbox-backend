@@ -5,6 +5,12 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from .models import ContentActivity, EditorialContent
 from .rules import get_transition_denial
 
+import logging
+from botocore.exceptions import ClientError
+from rest_framework.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
+
 Status = EditorialContent.Status
 Action = ContentActivity.Action
 
@@ -80,6 +86,12 @@ def perform_transition(content, user, transition, reason=''):
 
         locked.status = target_status
         locked.save(update_fields=update_fields)
+
+        try:
+            locked.on_status_change(from_status, locked.status)
+        except ClientError:
+            logger.exception('Status side effects failed for %s %s', type(locked).__name__, locked.pk)
+            raise ValidationError({'detail': "Couldn't update the public video files. Please try again."})
 
         ContentActivity.record(
             locked,
