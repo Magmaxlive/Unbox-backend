@@ -1,13 +1,23 @@
 import os
 from io import BytesIO
+import math
+import uuid
+import logging
+from decimal import Decimal
+from django.core.cache import cache
+from . import transcoding
 
 from django.conf import settings
 from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 from rest_framework.exceptions import ValidationError
+from django.db import transaction
+from botocore.exceptions import ClientError
 
 from . import storage
 from .models import Media_asset
+
+logger = logging.getLogger(__name__)
 
 Status = Media_asset.Status
 
@@ -223,3 +233,304 @@ def complete_image_upload(asset):
     ])
 
     return asset
+
+
+# MP4/MOV files are made of "boxes": bytes 4-8 name the first one.
+# Modern files start with "ftyp"; some older QuickTime files with these.
+MP4_MOV_FIRST_BOXES = {b'ftyp', b'moov', b'wide', b'free', b'mdat', b'skip', b'pnot'}
+MIN_VIDEO_SECONDS = 1
+
+
+def _looks_like_mp4_or_mov(header):
+    return len(header) >= 8 and header[4:8] in MP4_MOV_FIRST_BOXES
+
+
+# ── Videos: multipart uploads ──
+
+def video_part_count(file_size):
+    return max(1, math.ceil(file_size / settings.MEDIA_VIDEO_PART_SIZE))
+
+
+def _video_original_key(extension):
+    now = timezone.now()
+    return f'originals/{now:%Y/%m}/{uuid.uuid4()}.{extension}'
+
+
+def create_video_upload(user, video, file_name, file_size, mime_type):
+    """
+    Start a multipart upload for `video` and attach the new asset to it.
+    The browser then uploads parts straight to S3.
+    """
+    extension = settings.MEDIA_ALLOWED_VIDEO_TYPES[mime_type]
+    key = _video_original_key(extension)
+    upload_id = storage.create_multipart_upload(key, mime_type)
+
+    with transaction.atomic():
+        asset = Media_asset.objects.create(
+            uploaded_by=user,
+            bucket_name=settings.AWS_S3_BUCKET,
+            storage_key=key,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            media_type=Media_asset.MediaType.VIDEO,
+            status=Media_asset.Status.UPLOADING,
+            multipart_upload_id=upload_id,
+        )
+
+        # the new file replaces any earlier upload (that asset becomes unused
+        # and is removed later by cleanup_media)
+        video.media_asset = asset
+        video.duration = None
+        video.save(update_fields=['media_asset', 'duration', 'updated_at'])
+
+    return asset
+
+
+def sign_video_parts(asset, part_numbers):
+    part_count = video_part_count(asset.file_size)
+    if any(not 1 <= number <= part_count for number in part_numbers):
+        raise ValidationError({'part_numbers': f'Part numbers must be between 1 and {part_count}.'})
+
+    return [
+        {
+            'part_number': number,
+            'url': storage.presign_upload_part(
+                asset.storage_key,
+                asset.multipart_upload_id,
+                number,
+                settings.MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS,
+            ),
+        }
+        for number in part_numbers
+    ]
+
+
+def _fail_video_upload(asset, reason):
+    if asset.multipart_upload_id:
+        storage.abort_multipart_upload(asset.storage_key, asset.multipart_upload_id)
+
+    asset.status = Media_asset.Status.FAILED
+    asset.failure_reason = reason
+    asset.multipart_upload_id = ''
+    asset.save(update_fields=['status', 'failure_reason', 'multipart_upload_id', 'updated_at'])
+
+
+def complete_video_upload(asset, parts):
+    """
+    Join the parts, verify the file size, and hand the video to processing.
+    Safe against double completion: the asset is claimed first.
+    """
+    part_count = video_part_count(asset.file_size)
+    numbers = sorted(part['part_number'] for part in parts)
+    if numbers != list(range(1, part_count + 1)):
+        raise ValidationError({'parts': f'All {part_count} parts are needed to finish this upload.'})
+
+    # claim: only one request can move it out of "uploading"
+    claimed = Media_asset.objects.filter(
+        pk=asset.pk,
+        status=Media_asset.Status.UPLOADING,
+    ).update(status=Media_asset.Status.PROCESSING)
+    if not claimed:
+        raise ValidationError({'detail': 'This upload is no longer in progress.'})
+    asset.refresh_from_db()
+
+    try:
+        storage.complete_multipart_upload(
+            asset.storage_key,
+            asset.multipart_upload_id,
+            sorted(parts, key=lambda part: part['part_number']),
+        )
+    except ClientError:
+        _fail_video_upload(asset, 'The upload could not be completed.')
+        raise ValidationError({'detail': 'The upload could not be completed. Please upload the video again.'})
+
+    actual_size = storage.get_object_size(asset.storage_key)
+    if actual_size != asset.file_size:
+        storage.delete_objects([asset.storage_key])
+        asset.multipart_upload_id = ''
+        _fail_video_upload(asset, 'The uploaded file did not match the expected size.')
+        raise ValidationError({'detail': 'The uploaded file did not match the expected size. Please upload it again.'})
+
+    asset.multipart_upload_id = ''
+    asset.save(update_fields=['multipart_upload_id', 'updated_at'])
+
+        # a renamed image or document is refused before we pay for processing
+    if not _looks_like_mp4_or_mov(storage.read_object_start(asset.storage_key)):
+        storage.delete_objects([asset.storage_key])
+        asset.multipart_upload_id = ''
+        _fail_video_upload(asset, "This file isn't an MP4 or MOV video.")
+        raise ValidationError({'detail': "This file isn't an MP4 or MOV video. Please upload a different file."})
+
+    start_video_processing(asset)
+
+    return asset
+
+
+def abort_video_upload(asset):
+    _fail_video_upload(asset, 'Upload cancelled.')
+
+
+
+# ── Videos: processing (MediaConvert) ──
+
+PROCESSING_FAILED_REASON = "We couldn't process this video. Make sure it's a valid MP4 or MOV file."
+
+
+def start_video_processing(asset):
+    """
+    Start the MediaConvert job. If AWS can't start it right now, the asset
+    stays "processing" without a job id and the next status check retries.
+    """
+    try:
+        job_id = transcoding.create_job(asset)
+    except ClientError:
+        logger.exception('Could not start MediaConvert job for asset %s', asset.pk)
+        return asset
+
+    asset.processing_job_id = job_id
+    asset.save(update_fields=['processing_job_id', 'updated_at'])
+    return asset
+
+
+def _fail_processed_video(asset, reason, extra_keys=()):
+    """Mark failed and delete the original plus any outputs."""
+    storage.delete_objects([asset.storage_key, *extra_keys])
+    asset.status = Media_asset.Status.FAILED
+    asset.failure_reason = reason
+    asset.save(update_fields=['status', 'failure_reason', 'duration', 'updated_at'])
+
+
+def _finish_video_processing(asset, job):
+    from apps.videos.models import Video   # avoid importing videos at load time
+
+    output = job['OutputGroupDetails'][0]['OutputDetails'][0]   # the MP4 (first output)
+    duration = (Decimal(output.get('DurationInMs', 0)) / 1000).quantize(Decimal('0.01'))
+    video_details = output.get('VideoDetails', {})
+
+    mp4_key = transcoding.mp4_key(asset)
+    poster_candidates = transcoding.poster_keys(asset)
+    poster_key = next((key for key in poster_candidates if storage.get_object_size(key)), '')
+
+    asset.duration = duration
+
+        # a still image or broken file can come out as a near-zero-length "video"
+    if duration < MIN_VIDEO_SECONDS or not video_details.get('WidthInPx'):
+        _fail_processed_video(
+            asset,
+            PROCESSING_FAILED_REASON,
+            extra_keys=[mp4_key, *poster_candidates],
+        )
+        return asset
+
+    if duration > Video.MAX_DURATION_SECONDS:
+        _fail_processed_video(
+            asset,
+            f'Videos must be {Video.MAX_DURATION_SECONDS} seconds or shorter. '
+            f'This one is {round(duration)} seconds.',
+            extra_keys=[mp4_key, *poster_candidates],
+        )
+        return asset
+
+    with transaction.atomic():
+        asset.status = Media_asset.Status.READY
+        asset.width = video_details.get('WidthInPx')
+        asset.height = video_details.get('HeightInPx')
+        asset.variants = {'mp4': mp4_key, 'poster': poster_key}
+        asset.failure_reason = ''
+        asset.save(update_fields=[
+            'status', 'width', 'height', 'duration', 'variants', 'failure_reason', 'updated_at',
+        ])
+
+        # the displayed length on every video using this file
+        asset.videos.update(duration=duration)
+
+    return asset
+
+
+def refresh_video_processing(asset, force=False):
+    """
+    Check a processing video's MediaConvert job and apply the result.
+    Throttled to one AWS call per asset per MEDIA_VIDEO_STATUS_CHECK_SECONDS
+    (unless force=True, used by the management command).
+    """
+    if asset.media_type != Media_asset.MediaType.VIDEO or asset.status != Media_asset.Status.PROCESSING:
+        return asset
+
+    if not force and not cache.add(
+        f'video-processing-check:{asset.pk}', 1, settings.MEDIA_VIDEO_STATUS_CHECK_SECONDS
+    ):
+        return asset
+
+    # the job never started (AWS hiccup): try again
+    if not asset.processing_job_id:
+        return start_video_processing(asset)
+
+    try:
+        job = transcoding.get_job(asset.processing_job_id)
+    except ClientError:
+        logger.exception('Could not check MediaConvert job %s', asset.processing_job_id)
+        return asset
+
+    status = job['Status']
+
+    if status == 'COMPLETE':
+        return _finish_video_processing(asset, job)
+
+    if status in ('ERROR', 'CANCELED'):
+        logger.warning(
+            'MediaConvert job %s for asset %s ended %s: %s',
+            asset.processing_job_id, asset.pk, status, job.get('ErrorMessage', ''),
+        )
+        _fail_processed_video(
+            asset,
+            PROCESSING_FAILED_REASON,
+            extra_keys=[transcoding.mp4_key(asset), *transcoding.poster_keys(asset)],
+        )
+
+    # SUBMITTED / PROGRESSING: nothing to do yet
+    return asset
+
+
+# ── Videos: publishing to the CDN ──
+
+PUBLIC_CACHE_CONTROL = 'public, max-age=86400'
+VARIANT_CONTENT_TYPES = {'mp4': 'video/mp4', 'poster': 'image/jpeg'}
+
+
+def publish_video_files(asset):
+    """Copy the processed MP4 and poster into public/ for the CDN."""
+    if asset.status != Media_asset.Status.READY:
+        raise ValidationError({'media_asset': 'The video is still processing. Please try again in a moment.'})
+
+    public_variants = {}
+    for name, content_type in VARIANT_CONTENT_TYPES.items():
+        key = asset.variants.get(name)
+        if not key:
+            continue
+        public_key = f'public/{key}'
+        storage.copy_object(key, public_key, content_type, PUBLIC_CACHE_CONTROL)
+        public_variants[f'public_{name}'] = public_key
+
+    asset.variants = {**asset.variants, **public_variants}
+    asset.save(update_fields=['variants', 'updated_at'])
+
+
+def unpublish_video_files(asset):
+    """Delete the public copies and clear them from the CDN cache."""
+    public_keys = [
+        asset.variants.get(f'public_{name}')
+        for name in VARIANT_CONTENT_TYPES
+        if asset.variants.get(f'public_{name}')
+    ]
+    if not public_keys:
+        return
+
+    storage.delete_objects(public_keys)
+    storage.invalidate_cdn(public_keys)
+
+    asset.variants = {
+        name: key for name, key in asset.variants.items()
+        if not name.startswith('public_')
+    }
+    asset.save(update_fields=['variants', 'updated_at'])

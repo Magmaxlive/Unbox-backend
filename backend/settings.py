@@ -1,6 +1,7 @@
 
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -207,3 +208,30 @@ MEDIA_IMAGE_VARIANTS = {
     'thumb': 400,
     'large': 1600,
 }
+
+# Embedded videos: check links exist via each platform's oEmbed lookup.
+# Turn off for offline development or automated tests.
+VIDEO_EMBED_CHECK = os.getenv('VIDEO_EMBED_CHECK','True') == 'True'
+
+# Meta versions its Graph API; update here when Meta retires this version.
+INSTAGRAM_OEMBED_URL = os.getenv(
+    'INSTAGRAM_OEMBED_URL',
+    'https://graph.facebook.com/v26.0/instagram_oembed',
+)
+
+# videos (multipart upload straight to S3)
+MEDIA_MAX_VIDEO_BYTES = 500 * 1024 * 1024   #500 MB
+MEDIA_ALLOWED_VIDEO_TYPES = {
+    'video/mp4' : 'mp4',
+    'video/quicktime' : 'mov'   #iphone recordings
+}
+MEDIA_VIDEO_PART_SIZE = 10 * 1024 * 1024    #10 MB (S3 minimum is 5 MB)
+MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS = 3600  # 1 hour per signed part URL
+
+# media convert (video processing)
+MEDIACONVERT_ROLE_ARN = os.getenv('MEDIACONVERT_ROLE_ARN','')
+MEDIA_VIDEO_STATUS_CHECK_SECONDS = 15  # at most one AWS check per asset per 15 s
+
+# CLOUDFRONT 
+CLOUDFRONT_DISTRIBUTION_ID = os.getenv('CLOUDFRONT_DISTRIBUTION_ID','')
+MEDIA_PREVIEW_URL_EXPIRY_SECONDS = 3600   # signed links for unpublished videos

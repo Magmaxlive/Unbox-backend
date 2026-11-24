@@ -14,6 +14,12 @@ urlpatterns = [
     path('<uuid:id>/restore/',BlogTransitionView.as_view(transition='restore'),name='blog-restore'),
 
     # history
-    path('<uuid:id>/activity/',BlogActivityView.as_view(),name='blog-activity')
+    path('<uuid:id>/activity/',BlogActivityView.as_view(),name='blog-activity'),
+
+    # bulk actions
+    path('bulk/delete/',BlogBulkDeleteView.as_view(),name='blog-bulk-delete'),
+    path('bulk/archive/',BlogBulkTransitionView.as_view(transition='archive'),name='blog-bulk-archive'),
+    path('bulk/restore/', BlogBulkTransitionView.as_view(transition='restore'), name='blog-bulk-restore'),
+    path('bulk/category/', BlogBulkCategoryView.as_view(), name='blog-bulk-category'),
 
 ]

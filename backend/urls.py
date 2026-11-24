@@ -17,6 +17,9 @@ urlpatterns = [
     # media
     path('api/v1/media/',include('apps.media_assets.urls')),
 
+    # video
+    path('api/v1/videos/',include('apps.videos.urls')),
+
     # drf spectacular
     path('api/schema/',SpectacularAPIView.as_view(),name='schema'),
     path('api/docs/',SpectacularSwaggerView.as_view(url_name='schema'),name='swagger-ui')

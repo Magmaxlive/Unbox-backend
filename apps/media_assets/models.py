@@ -24,6 +24,9 @@ class Media_asset(models.Model):
     bucket_name = models.CharField(max_length=200)
     storage_key = models.CharField(max_length=500,unique=True)
 
+    # videos : S3 multipart upload in progress
+    multipart_upload_id = models.CharField(max_length=255,blank=True)
+
     file_name = models.CharField(max_length=255)
     file_size = models.PositiveBigIntegerField()
     mime_type = models.CharField(max_length=100)
@@ -32,6 +35,12 @@ class Media_asset(models.Model):
 
     width = models.PositiveIntegerField(null=True,blank=True)
     height = models.PositiveIntegerField(null=True,blank=True)
+
+    # videos : measured length in seconds
+    duration = models.DecimalField(max_digits=7, decimal_places=2, null=True,blank=True)
+
+    # videos: the MediaConvert job processing this upload
+    processing_job_id = models.CharField(max_length=100,blank=True)
 
     # generated public versions, e.g.
     # {"thumb": {"key": "public/...-thumb.webp", "width": 400, "height": 225}, "large": {...}}

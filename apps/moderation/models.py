@@ -64,6 +64,13 @@ class EditorialContent(models.Model):
     def get_submission_errors(self):
         return {}
 
+    def on_status_change(self, from_status, to_status):
+        """
+        Called by perform_transition() after a status change, inside the same
+        transaction. Raise to cancel the transition. Default: nothing
+        (blogs need no side effects; videos override this for CDN files).
+        """
+
 
 class ContentActivity(models.Model):
     class Action(models.TextChoices):

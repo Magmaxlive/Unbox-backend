@@ -8,7 +8,7 @@ from apps.core.pagination import StandardResultsPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import Blogfilter
 from apps.moderation.permissions import EditorialContentPermission
-from apps.moderation.views import EditorialTransitionView,EditorialActivityListView
+from apps.moderation.views import EditorialTransitionView,EditorialActivityListView,EditorialBulkCategoryView,EditorialBulkTransitionView,EditorialBulkDeleteView
 from apps.moderation.mixins import EditorialActivityMixin
 
 
@@ -56,4 +56,13 @@ class BlogTransitionView(EditorialTransitionView):
     serializer_class = BlogSerializer
 
 class BlogActivityView(EditorialActivityListView):
+    model = Blog
+
+class BlogBulkTransitionView(EditorialBulkTransitionView):
+    model = Blog
+
+class BlogBulkCategoryView(EditorialBulkCategoryView):
+    model = Blog
+
+class BlogBulkDeleteView(EditorialBulkDeleteView):
     model = Blog

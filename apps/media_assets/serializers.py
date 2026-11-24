@@ -101,3 +101,65 @@ class MediaImageSummarySerializer(serializers.ModelSerializer):
 
     def get_height(self, obj):
         return (obj.variants or {}).get('large', {}).get('height')
+
+
+class VideoUploadStartSerializer(serializers.Serializer):
+    video = serializers.UUIDField()
+    file_name = serializers.CharField(max_length=255)
+    file_size = serializers.IntegerField(min_value=1)
+    mime_type = serializers.CharField(max_length=100)
+
+    def validate_file_size(self,value):
+        if value > settings.MEDIA_MAX_VIDEO_BYTES:
+            limit_mb = settings.MEDIA_MAX_VIDEO_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f'Videos must be {limit_mb} MB or smaller.')
+        return value
+
+
+    def validate_mime_type(self, value):
+        if value not in settings.MEDIA_ALLOWED_VIDEO_TYPES:
+            raise serializers.ValidationError('Upload an MP4 or MOV video.')
+        return value
+
+
+    def validate_video(self, value):
+        # imported here: media_assets shouldn't import videos at load time
+        from apps.moderation.rules import get_edit_denial
+        from apps.videos.models import Video
+
+        user = self.context['request'].user
+        try:
+            video = Video.objects.visible_to(user).get(pk=value)
+        except Video.DoesNotExist:
+            raise serializers.ValidationError('Video not found.')
+
+        if video.source_type != Video.SourceType.UPLOAD:
+            raise serializers.ValidationError('This video uses a link, not an uploaded file.')
+
+        denial = get_edit_denial(user, video)
+        if denial:
+            raise serializers.ValidationError(denial)
+
+        if video.status in (Video.Status.PUBLISHED,Video.Status.ARCHIVED):
+            raise serializers.ValidationError(
+                "The video file can't be replaced after publishing. Create a new video instead."
+            )
+
+        return video
+
+
+class VideoPartsSerializer(serializers.Serializer):
+    part_numbers = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=100,
+    )
+
+
+class VideoPartSerializer(serializers.Serializer):
+    part_number = serializers.IntegerField(min_value=1)
+    etag = serializers.CharField(max_length=200)
+
+
+class VideoCompleteSerializer(serializers.Serializer):
+    parts = VideoPartSerializer(many=True, allow_empty=False)
