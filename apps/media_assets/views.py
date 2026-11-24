@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.conf import settings
+from .services import refresh_video_processing
 
 
 from rest_framework.views import APIView
@@ -87,6 +88,12 @@ class MediaAssetDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return visible_media(self.request.user)
+
+    def get_object(self):
+        asset = super().get_object()
+        if self.request.method == 'GET':
+            refresh_video_processing(asset)
+        return asset
 
 
 def _get_own_video_upload(request,id):
