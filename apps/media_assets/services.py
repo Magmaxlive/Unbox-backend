@@ -2,6 +2,10 @@ import os
 from io import BytesIO
 import math
 import uuid
+import logging
+from decimal import Decimal
+from django.core.cache import cache
+from . import transcoding
 
 from django.conf import settings
 from django.utils import timezone
@@ -12,6 +16,8 @@ from botocore.exceptions import ClientError
 
 from . import storage
 from .models import Media_asset
+
+logger = logging.getLogger(__name__)
 
 Status = Media_asset.Status
 
@@ -339,10 +345,122 @@ def complete_video_upload(asset, parts):
     asset.multipart_upload_id = ''
     asset.save(update_fields=['multipart_upload_id', 'updated_at'])
 
-    # V4: start MediaConvert processing here.
+    start_video_processing(asset)
 
     return asset
 
 
 def abort_video_upload(asset):
     _fail_video_upload(asset, 'Upload cancelled.')
+
+
+
+# ── Videos: processing (MediaConvert) ──
+
+PROCESSING_FAILED_REASON = "We couldn't process this video. Make sure it's a valid MP4 or MOV file."
+
+
+def start_video_processing(asset):
+    """
+    Start the MediaConvert job. If AWS can't start it right now, the asset
+    stays "processing" without a job id and the next status check retries.
+    """
+    try:
+        job_id = transcoding.create_job(asset)
+    except ClientError:
+        logger.exception('Could not start MediaConvert job for asset %s', asset.pk)
+        return asset
+
+    asset.processing_job_id = job_id
+    asset.save(update_fields=['processing_job_id', 'updated_at'])
+    return asset
+
+
+def _fail_processed_video(asset, reason, extra_keys=()):
+    """Mark failed and delete the original plus any outputs."""
+    storage.delete_objects([asset.storage_key, *extra_keys])
+    asset.status = Media_asset.Status.FAILED
+    asset.failure_reason = reason
+    asset.save(update_fields=['status', 'failure_reason', 'duration', 'updated_at'])
+
+
+def _finish_video_processing(asset, job):
+    from apps.videos.models import Video   # avoid importing videos at load time
+
+    output = job['OutputGroupDetails'][0]['OutputDetails'][0]   # the MP4 (first output)
+    duration = (Decimal(output.get('DurationInMs', 0)) / 1000).quantize(Decimal('0.01'))
+    video_details = output.get('VideoDetails', {})
+
+    mp4_key = transcoding.mp4_key(asset)
+    poster_candidates = transcoding.poster_keys(asset)
+    poster_key = next((key for key in poster_candidates if storage.get_object_size(key)), '')
+
+    asset.duration = duration
+
+    if duration > Video.MAX_DURATION_SECONDS:
+        _fail_processed_video(
+            asset,
+            f'Videos must be {Video.MAX_DURATION_SECONDS} seconds or shorter. '
+            f'This one is {round(duration)} seconds.',
+            extra_keys=[mp4_key, *poster_candidates],
+        )
+        return asset
+
+    with transaction.atomic():
+        asset.status = Media_asset.Status.READY
+        asset.width = video_details.get('WidthInPx')
+        asset.height = video_details.get('HeightInPx')
+        asset.variants = {'mp4': mp4_key, 'poster': poster_key}
+        asset.failure_reason = ''
+        asset.save(update_fields=[
+            'status', 'width', 'height', 'duration', 'variants', 'failure_reason', 'updated_at',
+        ])
+
+        # the displayed length on every video using this file
+        asset.videos.update(duration=duration)
+
+    return asset
+
+
+def refresh_video_processing(asset, force=False):
+    """
+    Check a processing video's MediaConvert job and apply the result.
+    Throttled to one AWS call per asset per MEDIA_VIDEO_STATUS_CHECK_SECONDS
+    (unless force=True, used by the management command).
+    """
+    if asset.media_type != Media_asset.MediaType.VIDEO or asset.status != Media_asset.Status.PROCESSING:
+        return asset
+
+    if not force and not cache.add(
+        f'video-processing-check:{asset.pk}', 1, settings.MEDIA_VIDEO_STATUS_CHECK_SECONDS
+    ):
+        return asset
+
+    # the job never started (AWS hiccup): try again
+    if not asset.processing_job_id:
+        return start_video_processing(asset)
+
+    try:
+        job = transcoding.get_job(asset.processing_job_id)
+    except ClientError:
+        logger.exception('Could not check MediaConvert job %s', asset.processing_job_id)
+        return asset
+
+    status = job['Status']
+
+    if status == 'COMPLETE':
+        return _finish_video_processing(asset, job)
+
+    if status in ('ERROR', 'CANCELED'):
+        logger.warning(
+            'MediaConvert job %s for asset %s ended %s: %s',
+            asset.processing_job_id, asset.pk, status, job.get('ErrorMessage', ''),
+        )
+        _fail_processed_video(
+            asset,
+            PROCESSING_FAILED_REASON,
+            extra_keys=[transcoding.mp4_key(asset), *transcoding.poster_keys(asset)],
+        )
+
+    # SUBMITTED / PROGRESSING: nothing to do yet
+    return asset
