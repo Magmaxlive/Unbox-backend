@@ -491,3 +491,46 @@ def refresh_video_processing(asset, force=False):
     # SUBMITTED / PROGRESSING: nothing to do yet
     return asset
 
+
+# ── Videos: publishing to the CDN ──
+
+PUBLIC_CACHE_CONTROL = 'public, max-age=86400'
+VARIANT_CONTENT_TYPES = {'mp4': 'video/mp4', 'poster': 'image/jpeg'}
+
+
+def publish_video_files(asset):
+    """Copy the processed MP4 and poster into public/ for the CDN."""
+    if asset.status != Media_asset.Status.READY:
+        raise ValidationError({'media_asset': 'The video is still processing. Please try again in a moment.'})
+
+    public_variants = {}
+    for name, content_type in VARIANT_CONTENT_TYPES.items():
+        key = asset.variants.get(name)
+        if not key:
+            continue
+        public_key = f'public/{key}'
+        storage.copy_object(key, public_key, content_type, PUBLIC_CACHE_CONTROL)
+        public_variants[f'public_{name}'] = public_key
+
+    asset.variants = {**asset.variants, **public_variants}
+    asset.save(update_fields=['variants', 'updated_at'])
+
+
+def unpublish_video_files(asset):
+    """Delete the public copies and clear them from the CDN cache."""
+    public_keys = [
+        asset.variants.get(f'public_{name}')
+        for name in VARIANT_CONTENT_TYPES
+        if asset.variants.get(f'public_{name}')
+    ]
+    if not public_keys:
+        return
+
+    storage.delete_objects(public_keys)
+    storage.invalidate_cdn(public_keys)
+
+    asset.variants = {
+        name: key for name, key in asset.variants.items()
+        if not name.startswith('public_')
+    }
+    asset.save(update_fields=['variants', 'updated_at'])
