@@ -235,6 +235,16 @@ def complete_image_upload(asset):
     return asset
 
 
+# MP4/MOV files are made of "boxes": bytes 4-8 name the first one.
+# Modern files start with "ftyp"; some older QuickTime files with these.
+MP4_MOV_FIRST_BOXES = {b'ftyp', b'moov', b'wide', b'free', b'mdat', b'skip', b'pnot'}
+MIN_VIDEO_SECONDS = 1
+
+
+def _looks_like_mp4_or_mov(header):
+    return len(header) >= 8 and header[4:8] in MP4_MOV_FIRST_BOXES
+
+
 # ── Videos: multipart uploads ──
 
 def video_part_count(file_size):
@@ -345,6 +355,13 @@ def complete_video_upload(asset, parts):
     asset.multipart_upload_id = ''
     asset.save(update_fields=['multipart_upload_id', 'updated_at'])
 
+        # a renamed image or document is refused before we pay for processing
+    if not _looks_like_mp4_or_mov(storage.read_object_start(asset.storage_key)):
+        storage.delete_objects([asset.storage_key])
+        asset.multipart_upload_id = ''
+        _fail_video_upload(asset, "This file isn't an MP4 or MOV video.")
+        raise ValidationError({'detail': "This file isn't an MP4 or MOV video. Please upload a different file."})
+
     start_video_processing(asset)
 
     return asset
@@ -396,6 +413,15 @@ def _finish_video_processing(asset, job):
     poster_key = next((key for key in poster_candidates if storage.get_object_size(key)), '')
 
     asset.duration = duration
+
+        # a still image or broken file can come out as a near-zero-length "video"
+    if duration < MIN_VIDEO_SECONDS or not video_details.get('WidthInPx'):
+        _fail_processed_video(
+            asset,
+            PROCESSING_FAILED_REASON,
+            extra_keys=[mp4_key, *poster_candidates],
+        )
+        return asset
 
     if duration > Video.MAX_DURATION_SECONDS:
         _fail_processed_video(
@@ -464,3 +490,6 @@ def refresh_video_processing(asset, force=False):
 
     # SUBMITTED / PROGRESSING: nothing to do yet
     return asset
+
+
+

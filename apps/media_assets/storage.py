@@ -201,3 +201,12 @@ def get_object_size(key):
             return None
         raise
     return response['ContentLength']
+
+def read_object_start(key, length=16):
+    """The first `length` bytes of an object (a ranged GET; doesn't download the file)."""
+    response = get_s3_client().get_object(
+        Bucket=settings.AWS_S3_BUCKET,
+        Key=key,
+        Range=f'bytes=0-{length - 1}',
+    )
+    return response['Body'].read()
