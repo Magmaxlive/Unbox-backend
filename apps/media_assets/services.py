@@ -491,5 +491,3 @@ def refresh_video_processing(asset, force=False):
     # SUBMITTED / PROGRESSING: nothing to do yet
     return asset
 
-
-

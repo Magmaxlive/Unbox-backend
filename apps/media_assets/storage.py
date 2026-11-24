@@ -8,7 +8,7 @@ Bucket layout:
 """
 
 from functools import lru_cache
-
+import uuid
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
@@ -210,3 +210,48 @@ def read_object_start(key, length=16):
         Range=f'bytes=0-{length - 1}',
     )
     return response['Body'].read()
+
+
+# cdn
+def copy_object(source_key, destination_key, content_type, cache_control):
+    """Copy within the bucket (used to publish processed files into public/)."""
+    get_s3_client().copy_object(
+        Bucket=settings.AWS_S3_BUCKET,
+        Key=destination_key,
+        CopySource={'Bucket': settings.AWS_S3_BUCKET, 'Key': source_key},
+        MetadataDirective='REPLACE',
+        ContentType=content_type,
+        CacheControl=cache_control,
+    )
+
+
+def presign_get(key, expires_in):
+    """A temporary read link for a private file (dashboard previews)."""
+    return get_s3_client().generate_presigned_url(
+        'get_object',
+        Params={'Bucket': settings.AWS_S3_BUCKET, 'Key': key},
+        ExpiresIn=expires_in,
+    )
+
+
+def invalidate_cdn(keys):
+    """
+    Tell CloudFront to drop cached copies of these public/ files.
+    The distribution's origin path is /public, so URLs omit that prefix.
+    """
+    if not keys or not settings.CLOUDFRONT_DISTRIBUTION_ID:
+        return
+
+    paths = ['/' + key.removeprefix('public/') for key in keys]
+
+    boto3.client(
+        'cloudfront',
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+    ).create_invalidation(
+        DistributionId=settings.CLOUDFRONT_DISTRIBUTION_ID,
+        InvalidationBatch={
+            'Paths': {'Quantity': len(paths), 'Items': paths},
+            'CallerReference': str(uuid.uuid4()),
+        },
+    )

@@ -231,3 +231,7 @@ MEDIA_VIDEO_PART_URL_EXPIRY_SECONDS = 3600  # 1 hour per signed part URL
 # media convert (video processing)
 MEDIACONVERT_ROLE_ARN = os.getenv('MEDIACONVERT_ROLE_ARN','')
 MEDIA_VIDEO_STATUS_CHECK_SECONDS = 15  # at most one AWS check per asset per 15 s
+
+# CLOUDFRONT 
+CLOUDFRONT_DISTRIBUTION_ID = os.getenv('CLOUDFRONT_DISTRIBUTION_ID','')
+MEDIA_PREVIEW_URL_EXPIRY_SECONDS = 3600   # signed links for unpublished videos
