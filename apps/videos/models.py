@@ -59,6 +59,18 @@ class Video(EditorialContent):
     def __str__(self):
         return self.title
 
+    def on_status_change(self,from_status,to_status):
+        """Published videos have their files on the CDN; nothing else does."""
+        from apps.media_assets.services import publish_video_files,unpublish_video_files
+
+        if self.source_type != self.SourceType.UPLOAD or self.media_asset is None:
+            return  #embed platform host the video
+
+        if to_status == self.Status.PUBLISHED:
+            publish_video_files(self.media_asset)
+        elif from_status == self.Status.PUBLISHED:
+            unpublish_video_files(self.media_asset)
+
     def get_submission_errors(self):
         from apps.media_assets.models import Media_asset
         errors = {}
