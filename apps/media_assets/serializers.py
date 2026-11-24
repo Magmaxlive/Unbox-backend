@@ -140,6 +140,11 @@ class VideoUploadStartSerializer(serializers.Serializer):
         if denial:
             raise serializers.ValidationError(denial)
 
+        if video.status in (Video.Status.PUBLISHED,Video.Status.ARCHIVED):
+            raise serializers.ValidationError(
+                "The video file can't be replaced after publishing. Create a new video instead."
+            )
+
         return video
 
 

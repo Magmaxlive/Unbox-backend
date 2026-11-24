@@ -5,11 +5,15 @@ from apps.media_assets.serializers import MediaImageSummarySerializer
 from apps.media_assets.validators import validate_image_asset
 from apps.categories.serializers import CategorySummarySerializer
 from .embeds import EmbedError,build_player_url,parse_embed_url,verify_embed
+from django.conf import settings
+from apps.media_assets import storage
+from apps.media_assets.models import Media_asset
 
 class VideoSerializer(LockedRequiredFieldsMixin,serializers.ModelSerializer):
     category_detail = CategorySummarySerializer(source = 'category',read_only=True)
     contributor_name = serializers.CharField(source = 'contributor.name',read_only=True)
     thumbnail_detail = MediaImageSummarySerializer(source = 'thumbnail',read_only=True)
+    media = serializers.SerializerMethodField()
 
     description = serializers.CharField(max_length=5000,allow_blank=True,required=False)
     source_url = serializers.CharField(max_length=1000,allow_blank=True,required=False)
@@ -37,6 +41,7 @@ class VideoSerializer(LockedRequiredFieldsMixin,serializers.ModelSerializer):
             'provider',
             'external_id',
             'media_asset',
+            'media',
             'thumbnail',
             'thumbnail_detail',
             'duration',
@@ -64,6 +69,7 @@ class VideoSerializer(LockedRequiredFieldsMixin,serializers.ModelSerializer):
             'provider',      # V2: parsed from source_url
             'external_id',   # V2: parsed from source_url
             'media_asset',   # V3: attached by the upload flow
+            'media',  
             'duration',      # V4: copied from processing
             'status',
             'submitted_at',
@@ -88,6 +94,34 @@ class VideoSerializer(LockedRequiredFieldsMixin,serializers.ModelSerializer):
             )
         return value
 
+
+    def _file_url(self,asset,name):
+        """CDN URL once published; otherwise a temporary signed link."""
+        public_key = asset.variants.get(f'public_{name}')
+        if public_key:
+            return f"{settings.MEDIA_CDN_URL.rstrip('/')}/{public_key.removeprefix('public/')}"
+
+        key = asset.variants.get(name)
+        if key:
+            return storage.presign_get(key,settings.MEDIA_PREVIEW_URL_EXPIRY_SECONDS)
+        return None
+
+    def get_media(self, obj):
+        """The uploaded file's state and playable URLs (uploads only)."""
+        asset = obj.media_asset
+        if obj.source_type != Video.SourceType.UPLOAD or asset is None:
+            return None
+
+        ready = asset.status == Media_asset.Status.READY
+        return {
+            'status': asset.status,
+            'failure_reason': asset.failure_reason,
+            'duration': asset.duration,
+            'width': asset.width,
+            'height': asset.height,
+            'mp4_url': self._file_url(asset, 'mp4') if ready else None,
+            'poster_url': self._file_url(asset, 'poster') if ready else None,
+        }
 
     def get_player_url(self,obj):
         if obj.source_type != Video.SourceType.EMBED:
