@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.moderation.mixins import EditorialActivityMixin
 from apps.moderation.permissions import EditorialContentPermission
-from apps.moderation.views import EditorialActivityListView,EditorialTransitionView
+from apps.moderation.views import EditorialActivityListView,EditorialTransitionView,EditorialBulkCategoryView,EditorialBulkDeleteView,EditorialBulkTransitionView
 from .filters import VideoFilter
 from .serializers import VideoSerializer
 from .models import Video 
@@ -61,4 +61,13 @@ class VideoTransitionView(EditorialTransitionView):
     serializer_class = VideoSerializer
 
 class VideoActivityView(EditorialActivityListView):
+    model = Video
+
+class VideoBulkTransitionView(EditorialBulkTransitionView):
+    model = Video
+
+class VideoBulkCategoryView(EditorialBulkCategoryView):
+    model = Video
+
+class VideoBulkDeleteView(EditorialBulkDeleteView):
     model = Video

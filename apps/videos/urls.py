@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import VideoDetailView,VideoListCreateView,VideoTransitionView,VideoActivityView
+from .views import *
 
 urlpatterns = [
     path('',VideoListCreateView.as_view(),name='video-list'),
@@ -16,4 +16,10 @@ urlpatterns = [
 
     # history
     path('<uuid:id>/activity/', VideoActivityView.as_view(), name='video-activity'),
+
+    # bulk actions
+    path('bulk/archive/',VideoBulkTransitionView.as_view(transition='archive'),name='video-bulk-archive'),
+    path('bulk/restore/',VideoBulkTransitionView.as_view(transition='restore'),name='video-bulk-restore'),
+    path('bulk/delete/',VideoBulkDeleteView.as_view(),name='video-bulk-delete'),
+    path('bulk/category/',VideoBulkCategoryView.as_view(),name='video-bulk-category'),
 ]
