@@ -496,7 +496,7 @@ def refresh_video_processing(asset, force=False):
 
 # ── Videos: publishing to the CDN ──
 
-PUBLIC_CACHE_CONTROL = 'public, max-age=86400'
+PUBLIC_CACHE_CONTROL = 'public, max-age=3600'
 VARIANT_CONTENT_TYPES = {'mp4': 'video/mp4', 'poster': 'image/jpeg'}
 
 
@@ -529,7 +529,8 @@ def unpublish_video_files(asset):
         return
 
     storage.delete_objects(public_keys)
-    storage.invalidate_cdn(public_keys)
+    # one wildcard path per video (CloudFront counts it as one path)
+    queue_cdn_invalidation([f'public/{transcoding.output_prefix(asset)}*'])
 
     asset.variants = {
         name: key for name, key in asset.variants.items()
