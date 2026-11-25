@@ -23,6 +23,15 @@ ORIGINALS_PREFIX = 'originals/'
 IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 
 
+def list_keys(prefix):
+    """Every object key under a prefix (e.g. one video's output folder)."""
+    keys = []
+    paginator = get_s3_client().get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=settings.AWS_S3_BUCKET, Prefix=prefix):
+        keys.extend(item['Key'] for item in page.get('Contents',[]))
+    return keys
+
+
 @lru_cache(maxsize=1)
 def get_s3_client():
     if not settings.AWS_S3_BUCKET or not settings.AWS_S3_REGION:

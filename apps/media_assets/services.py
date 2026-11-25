@@ -13,6 +13,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
 from botocore.exceptions import ClientError
+import contextvars
+from contextlib import contextmanager
 
 from . import storage
 from .models import Media_asset
@@ -494,7 +496,7 @@ def refresh_video_processing(asset, force=False):
 
 # ── Videos: publishing to the CDN ──
 
-PUBLIC_CACHE_CONTROL = 'public, max-age=86400'
+PUBLIC_CACHE_CONTROL = 'public, max-age=3600'
 VARIANT_CONTENT_TYPES = {'mp4': 'video/mp4', 'poster': 'image/jpeg'}
 
 
@@ -527,10 +529,46 @@ def unpublish_video_files(asset):
         return
 
     storage.delete_objects(public_keys)
-    storage.invalidate_cdn(public_keys)
+    # one wildcard path per video (CloudFront counts it as one path)
+    queue_cdn_invalidation([f'public/{transcoding.output_prefix(asset)}*'])
 
     asset.variants = {
         name: key for name, key in asset.variants.items()
         if not name.startswith('public_')
     }
     asset.save(update_fields=['variants', 'updated_at'])
+
+
+# ── CDN invalidations: after commit, batched during bulk actions ──
+
+_cdn_batch = contextvars.ContextVar('cdn_invalidation_batch',default=None)
+
+def _invalidate_now(keys):
+    """Best effort: the files are already gone; a stale cache expires within an hour."""
+    if not keys:
+        return
+    try:
+        storage.invalidate_cdn(keys)
+    except ClientError:
+        logger.exception('CDN invalidation failed for %s',keys)
+
+
+def queue_cdn_invalidation(keys):
+    """Invalidate after the current transaction commits, or at the end of a batch."""
+    batch = _cdn_batch.get()
+    if batch is not None:
+        batch.extend(keys)
+        return
+    transaction.on_commit(lambda:_invalidate_now(list(keys))) 
+
+
+@contextmanager
+def batched_cdn_invalidation():
+   """Collect every invalidation inside this block and send them in one request."""
+   keys = []
+   token = _cdn_batch.set(keys)
+   try:
+       yield
+   finally:
+       _cdn_batch.reset(token)
+       _invalidate_now(keys) 
