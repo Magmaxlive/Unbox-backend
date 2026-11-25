@@ -32,22 +32,28 @@ def _load_visible(model, user, ids):
 
 def bulk_transition(model, user, ids, transition):
     """Archive or restore many items. Returns {"succeeded": [...], "skipped": [...]}."""
+
+     # imported here: moderation shouldn't depend on media_assets at load time
+    from apps.media_assets.services import batched_cdn_invalidation
+
+
     items = _load_visible(model, user, ids)
     succeeded, skipped = [], []
 
-    for pk in ids:
-        obj = items.get(pk)
-        if obj is None:
-            skipped.append({'id': str(pk), 'title': '', 'reason': 'Not found.'})
-            continue
+    with batched_cdn_invalidation():
+        for pk in ids:
+            obj = items.get(pk)
+            if obj is None:
+                skipped.append({'id': str(pk), 'title': '', 'reason': 'Not found.'})
+                continue
 
-        try:
-            perform_transition(obj, user, transition)
-        except (PermissionDenied, ValidationError) as error:
-            skipped.append({'id': str(pk), 'title': obj.title, 'reason': _error_text(error)})
-            continue
+            try:
+                perform_transition(obj, user, transition)
+            except (PermissionDenied, ValidationError) as error:
+                skipped.append({'id': str(pk), 'title': obj.title, 'reason': _error_text(error)})
+                continue
 
-        succeeded.append(str(pk))
+            succeeded.append(str(pk))
 
     return {'succeeded': succeeded, 'skipped': skipped}
 
