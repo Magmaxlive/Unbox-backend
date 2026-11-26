@@ -31,6 +31,7 @@ class ReviewQueueView(APIView):
         def rows(model,kind):
             return(
                 pending(model)
+                .order_by()
                 .annotate(kind=Value(kind,output_field=CharField()))
                 .values('id','submitted_at','kind')
             )
