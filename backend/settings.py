@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.uploads',
     'apps.media_assets',
     'apps.core',
+    'apps.reviews'
 
     # Third party
     'rest_framework',
