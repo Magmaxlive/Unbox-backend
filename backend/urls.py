@@ -20,6 +20,9 @@ urlpatterns = [
     # video
     path('api/v1/videos/',include('apps.videos.urls')),
 
+    # reviews
+    path('api/v1/reviews/',include('apps.reviews.urls')),
+
     # drf spectacular
     path('api/schema/',SpectacularAPIView.as_view(),name='schema'),
     path('api/docs/',SpectacularSwaggerView.as_view(url_name='schema'),name='swagger-ui')
